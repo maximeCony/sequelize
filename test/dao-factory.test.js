@@ -1792,6 +1792,32 @@ describe(Support.getTestDialectTeaser("DAOFactory"), function () {
         })
       })
 
+      it('supports async transactions', function(done) {
+        Support.prepareTransactionTest(this.sequelize, function(sequelize) {
+          var User = sequelize.define('User', { username: Sequelize.STRING })
+          var testAsync = function(done) {
+            sequelize.transaction(function(t) {
+              User.create({ username: 'foo' }, { transaction: t }).success(function() {
+                User.where({ username: "foo" }).exec().success(function(users1) {
+                  User.where({ username: "foo" }).exec({ transaction: t }).success(function(users2) {
+                    expect(users1).to.have.length(0)
+                    expect(users2).to.have.length(1)
+                    t.rollback().success(function() { done() })
+                  })
+                })
+              })
+            })
+          }
+          User.sync({ force: true }).success(function() {
+            var tasks = []
+            for (var i = 0; i < 1000; i++) {
+              tasks.push(testAsync.bind(this, i))
+            };
+            async.parallelLimit(tasks, 100, done)
+          })
+        })
+      })
+
       it("selects all users with name 'foo'", function(done) {
         this
           .User
